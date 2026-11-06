@@ -3,42 +3,51 @@ name: RummyWinAI Android Build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-            - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: latest
-          packages: |
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+          echo "/usr/local/lib/android/sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "/usr/local/lib/android/sdk/platform-tools" >> "$GITHUB_PATH"
+          test -x /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/usr/local/lib/android/sdk --licenses >/dev/null
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/usr/local/lib/android/sdk "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Extract project
+      - name: Extract Android project
+        shell: bash
         run: |
           unzip -o RummyWinAI_Android_Starter.zip -d source
+          test -f source/RummyWinAI_Android/settings.gradle.kts
+          test -f source/RummyWinAI_Android/app/build.gradle.kts
 
-      - name: Build APK
-        run: |
-          gradle -p source/RummyWinAI_Android assembleDebug
+      - name: Build debug APK
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: '8.9'
+          build-root-directory: source/RummyWinAI_Android
+          arguments: assembleDebug
 
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: RummyWinAI-APK
+          name: RummyWinAI-debug-APK
           path: source/RummyWinAI_Android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
