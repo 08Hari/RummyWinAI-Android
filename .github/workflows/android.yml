@@ -24,17 +24,14 @@ jobs:
         shell: bash
         run: |
           set -e
-          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
 
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
-          if [ ! -x "$SDKMANAGER" ]; then
-            echo "sdkmanager not found: $SDKMANAGER"
-            exit 1
-          fi
+          "$SDKMANAGER" --version
 
           set +o pipefail
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
@@ -46,13 +43,35 @@ jobs:
             "build-tools;35.0.0"
 
       - name: Extract Android project
+        run: |
+          unzip -o RummyWinAI_Android_Starter.zip -d source
+
+      - name: Fix Java and Kotlin targets
         shell: bash
         run: |
-          set -e
-          unzip -o RummyWinAI_Android_Starter.zip -d source
-          find source -maxdepth 3 -type f | sort | head -80
-          test -f source/RummyWinAI_Android/settings.gradle.kts
-          test -f source/RummyWinAI_Android/app/build.gradle.kts
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("source/RummyWinAI_Android/app/build.gradle.kts")
+          s = p.read_text()
+
+          s = s.replace(
+              "    compileSdk = 35",
+              """    compileSdk = 35
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = "17"
+              }"""
+          )
+
+          p.write_text(s)
+          print(p.read_text())
+          PY
 
       - name: Build debug APK
         uses: gradle/gradle-build-action@v3
